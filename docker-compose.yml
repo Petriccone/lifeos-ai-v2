@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: lifeos-postgres
+    environment:
+      POSTGRES_DB: lifeos
+      POSTGRES_USER: lifeos
+      POSTGRES_PASSWORD: lifeos_local_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeos -d lifeos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  supabase-studio:
+    image: supabase/studio:20241028-91ff1dd
+    container_name: lifeos-supabase-studio
+    environment:
+      STUDIO_PG_META_URL: http://pg-meta:8080
+      SUPABASE_URL: http://localhost:8000
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-your-anon-key}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-your-service-key}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+
+  pg-meta:
+    image: supabase/postgres-meta:v0.80.0
+    container_name: lifeos-pg-meta
+    environment:
+      PG_META_DB_HOST: postgres
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: lifeos
+      PG_META_DB_USER: lifeos
+      PG_META_DB_PASSWORD: lifeos_local_password
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:

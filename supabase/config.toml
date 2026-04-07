@@ -1,0 +1,97 @@
+# ===========================================
+# Supabase Local Development Config
+# ===========================================
+# For use with `supabase init` and `supabase start`
+# ===========================================
+
+[project]
+project_id = "lifeos-local"
+name = "LifeOS AI"
+
+# ===========================================
+# API Configuration
+# ===========================================
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+# ===========================================
+# Database
+# ===========================================
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 16
+
+# ===========================================
+# Studio
+# ===========================================
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# ===========================================
+# Inbucket (Email testing)
+# ===========================================
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+# ===========================================
+# Storage
+# ===========================================
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+# ===========================================
+# Auth
+# ===========================================
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+# ===========================================
+# Auth - JWT Secret
+# ===========================================
+# Generate with: openssl rand -base64 32
+[auth.jwt_secret]
+secret = "lifeos-local-jwt-secret-change-in-production"
+
+# ===========================================
+# Pgvector Configuration
+# ===========================================
+# Enable vector similarity search for AI features
+
+[postgres]
+statement_timeout = "30s"
+idle_transaction_timeout = "300s"
+
+# ===========================================
+# Edge Runtime
+# ===========================================
+[edge_runtime]
+enabled = true
+port = 54325
+
+# ===========================================
+# Analytics
+# ===========================================
+[analytics]
+enabled = true
+port = 54327
+backend = "postgres"
