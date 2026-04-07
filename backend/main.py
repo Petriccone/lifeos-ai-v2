@@ -253,7 +253,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+# Import and register health sync router for Xiaomi Mi Watch 5 / Google Fit integration
+from routers.health_sync import router as health_sync_router
+app.include_router(health_sync_router, prefix="/api/v1")
 # =============================================================================
 # Health & Status
 # =============================================================================

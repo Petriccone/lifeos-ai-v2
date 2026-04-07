@@ -1,14 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
-interface MoodData {
-  anxiety: number;
-  happiness: number;
-  wellness: number;
-  sleep: number;
-  recovery: number;
-}
+import { MessageSquare, HeartPulse, Target, Activity, Moon, BatteryCharging, Zap, Plus, Sparkles } from "lucide-react";
 
 interface HealthData {
   mood_score: number;
@@ -24,356 +17,177 @@ interface Task {
   title: string;
   priority: string;
   status: string;
-  category?: string;
 }
 
-interface Brief {
-  date: string;
-  mood_summary: string;
-  health_score: number;
-  recommended_tasks: Task[];
-  ai_insights: string;
-}
-
-// Circular Gauge Component
-function CircularGauge({ value, label, color, size = 80 }: { value: number; label: string; color: string; size?: number }) {
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (value / 100) * circumference;
-
+// Custom specialized Components
+function MiniGauge({ value, color, icon: Icon, label }: { value: number; color: string; icon: any; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg className="transform -rotate-90" width={size} height={size}>
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="currentColor"
-            strokeWidth={strokeWidth}
-            fill="none"
-            className="text-[#1a1a2e]"
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            className="transition-all duration-1000"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-bold text-white">{Math.round(value)}%</span>
-        </div>
+    <div className="glass-card p-4 flex flex-col justify-between hover:bg-white/[0.08] transition-colors h-28">
+      <div className="flex items-center justify-between mb-3">
+        <Icon className="w-5 h-5" style={{ color }} />
+        <span className="text-sm font-semibold">{Math.round(value * 100)}%</span>
       </div>
-      <span className="text-xs text-gray-400">{label}</span>
-    </div>
-  );
-}
-
-// Mini Metric Ring
-function MetricRing({ label, value, color }: { label: string; value: number; color: string }) {
-  const size = 48;
-  const strokeWidth = 4;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (value / 100) * circumference;
-
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg className="transform -rotate-90" width={size} height={size}>
-          <circle cx={size / 2} cy={size / 2} r={radius} stroke="#1a1a2e" strokeWidth={strokeWidth} fill="none" />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[10px] font-medium text-white">{Math.round(value)}</span>
-        </div>
+      <div className="w-full bg-black/40 rounded-full h-1.5 overflow-hidden">
+         <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${value * 100}%`, backgroundColor: color }} />
       </div>
-      <span className="text-[10px] text-gray-500">{label}</span>
+      <span className="text-xs text-gray-400 mt-2">{label}</span>
     </div>
   );
 }
 
-// Category Tile
-function CategoryTile({ title, icon, gradient, onClick }: { title: string; icon: string; gradient: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`${gradient} p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-transform hover:scale-105 active:scale-95`}
-    >
-      <span className="text-2xl">{icon}</span>
-      <span className="text-xs font-medium text-white">{title}</span>
-    </button>
-  );
-}
-
-// Task Item
-function TaskItem({ task, onToggle }: { task: Task; onToggle: () => void }) {
-  const priorityColors: Record<string, string> = {
-    urgent: "border-red-500",
-    high: "border-orange-500",
-    medium: "border-yellow-500",
-    low: "border-green-500",
-  };
-
-  return (
-    <div className={`flex items-center gap-3 p-3 bg-[#1a1a2e] rounded-xl border-l-4 ${priorityColors[task.priority] || "border-gray-500"}`}>
-      <button onClick={onToggle} className="text-gray-400 hover:text-white transition-colors">
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10" strokeWidth="2" />
-        </svg>
-      </button>
-      <span className="flex-1 text-sm text-white">{task.title}</span>
-      <span className={`text-[10px] px-2 py-1 rounded-full ${
-        task.priority === "urgent" ? "bg-red-500/20 text-red-400" :
-        task.priority === "high" ? "bg-orange-500/20 text-orange-400" :
-        "bg-gray-500/20 text-gray-400"
-      }`}>
-        {task.priority}
-      </span>
-    </div>
-  );
-}
-
-// AI Chat Bubble
-function AIChatBubble({ message }: { message: string }) {
-  return (
-    <div className="flex gap-3 p-4 bg-[#1a1a2e] rounded-2xl">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-        ✨
-      </div>
-      <p className="text-sm text-gray-300">{message}</p>
-    </div>
-  );
-}
-
-export default function Home() {
+export default function DashboardPage() {
   const [healthData, setHealthData] = useState<HealthData | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [brief, setBrief] = useState<Brief | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data for demo - in production, fetch from API
-    setHealthData({
-      mood_score: 72,
-      anxiety: 0.25,
-      happiness: 0.65,
-      wellness: 0.78,
-      sleep: 0.88,
-      recovery: 0.74,
-    });
-
+    // Mock data for demo
+    setHealthData({ mood_score: 84, anxiety: 0.15, happiness: 0.85, wellness: 0.82, sleep: 0.90, recovery: 0.78 });
     setTasks([
-      { id: "1", title: "Review Q2 goals", priority: "high", status: "todo", category: "work" },
-      { id: "2", title: "Gym - Leg Day", priority: "medium", status: "todo", category: "physical" },
-      { id: "3", title: "Call mom", priority: "low", status: "todo", category: "social" },
+      { id: "1", title: "Review UI feedback", priority: "high", status: "todo" },
+      { id: "2", title: "Upper Body Workout", priority: "medium", status: "todo" },
+      { id: "3", title: "Read 20 pages", priority: "low", status: "todo" },
     ]);
-
-    setBrief({
-      date: new Date().toISOString().split("T")[0],
-      mood_summary: "You've been feeling pretty good this week! Energy levels are up and sleep quality has improved.",
-      health_score: 72,
-      recommended_tasks: [
-        { id: "1", title: "Review Q2 goals", priority: "high", status: "todo" },
-        { id: "2", title: "Gym - Leg Day", priority: "medium", status: "todo" },
-      ],
-      ai_insights: "Your sleep score is excellent (88%). Keep maintaining that consistent bedtime routine!",
-    });
-
     setLoading(false);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="text-white">Loading LifeOS...</div>
-      </div>
-    );
-  }
+  const handleWatchSync = async () => {
+    try {
+       const res = await fetch("http://localhost:8000/api/v1/health-sync/google/login-url");
+       const data = await res.json();
+       if (data.url) {
+           window.location.href = data.url; // Redireciona para o Google OAuth
+       }
+    } catch (err) {
+       console.error("Failed to fetch sync URL", err);
+       alert("O backend do LifeOS precisa estar rodando para sincronizar o smartwatch.");
+    }
+  };
+
+  if (loading) return (
+     <div className="flex-1 flex items-center justify-center p-12 min-h-[60vh]">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+           <Zap className="w-8 h-8 text-indigo-400" />
+           <p className="text-white/50 text-sm">Syncing LifeOS...</p>
+        </div>
+     </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white pb-24">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-6xl mx-auto pb-32 md:pb-8">
       {/* Header */}
-      <header className="px-4 py-6 flex items-center justify-between">
+      <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            LifeOS AI
-          </h1>
-          <p className="text-xs text-gray-500">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
+           <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">Good evening, Rafael</h2>
+           <p className="text-sm text-gray-400">Here's your weekly synthesis.</p>
         </div>
-        <div className="flex gap-3">
-          <button className="w-10 h-10 rounded-full bg-[#1a1a2e] flex items-center justify-center">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-          </button>
-          <button className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <span className="text-sm font-bold">R</span>
-          </button>
+      </div>
+
+      {/* Bento Grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+        
+        {/* Main Score - takes 1 column, spans 2 rows on desktop */}
+        <div className="glass-panel rounded-3xl p-6 md:row-span-2 relative overflow-hidden flex flex-col justify-between group h-full min-h-[300px]">
+           <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/20 blur-3xl rounded-full" />
+           <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                 <HeartPulse className="text-emerald-400 w-5 h-5" />
+                 <h3 className="font-semibold text-white">Health Score</h3>
+              </div>
+              <p className="text-xs text-gray-400">Optimal status reached</p>
+           </div>
+           
+           <div className="flex flex-col items-center justify-center py-6 relative flex-1">
+               <div className="absolute inset-0 border-[8px] border-white/5 rounded-full w-44 h-44 m-auto" />
+               <div className="absolute inset-0 border-[8px] border-emerald-400 rounded-full w-44 h-44 m-auto border-t-transparent border-l-transparent transform -rotate-45 transition-all duration-1000" />
+               <div className="text-5xl font-bold text-white mb-1 relative z-10 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">{healthData?.mood_score}</div>
+               <span className="text-xs text-gray-400 relative z-10">/100</span>
+           </div>
+
+           <div className="flex gap-2 relative z-10 w-full mt-4">
+               <button className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white text-[13px] font-medium transition-all rounded-xl border border-white/5">
+                   Log Entry
+               </button>
+               <button onClick={handleWatchSync} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-[13px] font-medium transition-all rounded-xl flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                   <Zap className="w-3.5 h-3.5" /> Xiaomi Sync
+               </button>
+           </div>
         </div>
-      </header>
 
-      <main className="px-4 space-y-6">
-        {/* Health Score Section */}
-        <section className="bg-[#1a1a2e] rounded-3xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-semibold">Health Score</h2>
-              <p className="text-sm text-gray-400">Your overall wellbeing</p>
-            </div>
-            <div className="text-right">
-              <span className="text-3xl font-bold text-green-400">{healthData?.mood_score || 0}</span>
-              <span className="text-sm text-gray-500">/100</span>
-            </div>
-          </div>
-
-          {/* Main Score Gauge */}
-          <div className="flex justify-center mb-6">
-            <CircularGauge value={healthData?.mood_score || 0} label="Health" color="#10b981" size={140} />
-          </div>
-
-          {/* Workout Type Button */}
-          <button className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 font-medium text-sm mb-6 flex items-center justify-center gap-2">
-            <span>🏋️</span>
-            <span>Push Day</span>
-          </button>
-
-          {/* Mini Metrics Grid */}
-          <div className="grid grid-cols-5 gap-2">
-            <MetricRing label="Anxiety" value={(healthData?.anxiety || 0) * 100} color="#ef4444" />
-            <MetricRing label="Happiness" value={(healthData?.happiness || 0) * 100} color="#10b981" />
-            <MetricRing label="Wellness" value={(healthData?.wellness || 0) * 100} color="#3b82f6" />
-            <MetricRing label="Sleep" value={(healthData?.sleep || 0) * 100} color="#8b5cf6" />
-            <MetricRing label="Recovery" value={(healthData?.recovery || 0) * 100} color="#06b6d4" />
-          </div>
-        </section>
-
-        {/* Life Progress Chart */}
-        <section className="bg-[#1a1a2e] rounded-3xl p-6">
-          <h2 className="text-lg font-semibold mb-4">Life Progress</h2>
-          <div className="h-32 flex items-end justify-between gap-2">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
-              const heights = [45, 60, 55, 70, 65, 80, 72];
-              return (
-                <div key={day} className="flex-1 flex flex-col items-center gap-2">
-                  <div
-                    className="w-full bg-gradient-to-t from-purple-500 to-pink-500 rounded-t-lg transition-all"
-                    style={{ height: `${heights[i]}%` }}
-                  />
-                  <span className="text-xs text-gray-500">{day}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-center gap-4 mt-4 text-xs">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-blue-500" /> This Week
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-green-500/50" /> Prev Week
-            </span>
-          </div>
-        </section>
+        {/* Metrics Grid */}
+        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+           <MiniGauge value={healthData?.happiness || 0} color="#c084fc" icon={HeartPulse} label="Happiness" />
+           <MiniGauge value={healthData?.sleep || 0} color="#60a5fa" icon={Moon} label="Sleep" />
+           <MiniGauge value={healthData?.recovery || 0} color="#34d399" icon={BatteryCharging} label="Recovery" />
+           <MiniGauge value={healthData?.anxiety || 0} color="#f87171" icon={Activity} label="Stress" />
+        </div>
 
         {/* Tasks Section */}
-        <section className="bg-[#1a1a2e] rounded-3xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold">Today's Tasks</h2>
-              <p className="text-sm text-gray-500">{tasks.filter(t => t.status === "todo").length} pending</p>
-            </div>
-            <button className="text-purple-400 text-sm font-medium">+ Add Task</button>
-          </div>
-          <div className="space-y-2">
-            {tasks.slice(0, 3).map(task => (
-              <TaskItem key={task.id} task={task} onToggle={() => {}} />
-            ))}
-          </div>
-        </section>
+        <div className="glass-panel rounded-3xl p-6 md:col-span-1 flex flex-col h-full min-h-[220px]">
+           <div className="flex justify-between items-center mb-6">
+              <h3 className="font-semibold text-white flex items-center gap-2"><Target className="w-4 h-4 text-pink-400" /> Priorities</h3>
+              <button className="text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-1.5 rounded-lg transition-colors"><Plus className="w-4 h-4" /></button>
+           </div>
+           <div className="space-y-3 flex-1">
+              {tasks.map(task => (
+                 <div key={task.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 hover:bg-white/10 transition border border-white/5 group cursor-pointer">
+                    <div className="w-4 h-4 rounded-md border border-gray-500 flex-shrink-0 group-hover:border-indigo-400 transition-colors" />
+                    <span className="text-sm text-gray-200 flex-1 truncate">{task.title}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${task.priority === 'high' ? 'bg-orange-500' : task.priority === 'medium' ? 'bg-yellow-500' : 'bg-emerald-500'}`} />
+                 </div>
+              ))}
+           </div>
+        </div>
 
-        {/* Category Tiles */}
-        <section className="grid grid-cols-2 gap-3">
-          <CategoryTile title="Mental Health" icon="🧠" gradient="bg-gradient-to-br from-purple-600 to-purple-900" onClick={() => {}} />
-          <CategoryTile title="Physical Health" icon="💪" gradient="bg-gradient-to-br from-red-600 to-orange-900" onClick={() => {}} />
-          <CategoryTile title="Work & Productivity" icon="💼" gradient="bg-gradient-to-br from-blue-600 to-blue-900" onClick={() => {}} />
-          <CategoryTile title="Social & Financial" icon="💰" gradient="bg-gradient-to-br from-yellow-600 to-orange-900" onClick={() => {}} />
-        </section>
+        {/* Insight / Progress */}
+        <div className="glass-panel rounded-3xl p-6 md:col-span-1 relative overflow-hidden flex flex-col justify-end min-h-[220px] group border-indigo-500/20">
+           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 group-hover:from-indigo-500/20 group-hover:to-purple-500/20 transition-all duration-500" />
+           <div className="absolute top-6 left-6 w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center shadow-lg">
+              <Sparkles className="w-5 h-5 text-indigo-300" />
+           </div>
+           <div className="relative z-10 mt-16">
+              <h3 className="font-semibold text-white mb-2 text-lg">AI Synthesis</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                 You've been incredibly consistent this week. Your sleep score is up 12% directly correlating with reduced stress levels. Keep the momentum.
+              </p>
+           </div>
+        </div>
 
-        {/* AI Insight */}
-        <section className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-3xl p-6 border border-purple-500/20">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-              ✨
-            </div>
-            <div>
-              <h3 className="font-semibold mb-1">AI Insight</h3>
-              <p className="text-sm text-gray-300">{brief?.ai_insights}</p>
-            </div>
-          </div>
-        </section>
-      </main>
+      </div>
 
-      {/* Floating AI Chat Button */}
-      <button
-        onClick={() => setChatOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30 hover:scale-110 transition-transform"
+      {/* Floating Chat Trigger */}
+      <button 
+         onClick={() => setChatOpen(true)}
+         className="fixed bottom-20 right-6 md:bottom-8 md:right-8 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:scale-110 hover:shadow-[0_0_50px_rgba(99,102,241,0.5)] transition-all z-50 group"
       >
-        <span className="text-xl">✨</span>
+         <MessageSquare className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
       </button>
 
-      {/* Chat Modal */}
+      {/* Basic Chat Modal implementation */}
       {chatOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-end justify-center z-50 p-4">
-          <div className="bg-[#1a1a2e] rounded-3xl w-full max-w-md max-h-[70vh] flex flex-col">
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="font-semibold">LifeOS AI Chat</h3>
-              <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-white">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-md transition-all">
+            <div className="w-full md:w-[450px] bg-[#0c0c10] md:border border-white/10 md:rounded-3xl h-[85vh] md:h-[600px] flex flex-col shadow-2xl animate-fadeIn">
+               <div className="p-4 md:p-5 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                  <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg"><Sparkles className="w-4 h-4 text-white" /></div>
+                     <span className="font-semibold text-white">LifeOS Assistant</span>
+                  </div>
+                  <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors">✕</button>
+               </div>
+               <div className="flex-1 p-5 overflow-y-auto hidden-scrollbar">
+                  <div className="flex gap-4 animate-fadeIn">
+                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0 flex items-center justify-center mt-1"><Sparkles className="w-4 h-4 text-white" /></div>
+                     <div className="bg-white/10 backdrop-blur border border-white/5 p-4 rounded-2xl rounded-tl-sm text-sm text-gray-200 leading-relaxed shadow-sm">
+                        Hello! Based on your metrics, pushing a hard workout today seems ideal. Ready to log it?
+                     </div>
+                  </div>
+               </div>
+               <div className="p-4 border-t border-white/5 bg-white/[0.02]">
+                  <input type="text" placeholder="Type a message..." className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 focus:bg-black/60 transition-all placeholder:text-gray-600" />
+               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <AIChatBubble message="Hey! How are you feeling today? I can help track your mood, suggest workouts, or just chat." />
-            </div>
-            <div className="p-4 border-t border-gray-800">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="Tell me how you feel..."
-                  className="flex-1 bg-[#0a0a0f] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-                <button className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+         </div>
       )}
     </div>
   );
