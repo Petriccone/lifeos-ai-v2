@@ -394,7 +394,7 @@ async def create_mood_entry(
         recovery=entry.recovery,
         energy=entry.energy,
         source_text=entry.source_text,
-        metadata={"source": "manual"}
+        extra_data={"source": "manual"}
     )
     
     db.add(mood_entry)
@@ -445,7 +445,7 @@ async def detect_and_create_mood(
         recovery=metrics.recovery,
         energy=metrics.energy,
         source_text=text,
-        metadata={
+        extra_data={
             "source": "ai_detection",
             "confidence": metrics.confidence,
             "reasoning": metrics.reasoning
@@ -1126,7 +1126,7 @@ async def chat(
             recovery=metrics.recovery,
             energy=metrics.energy,
             source_text=request.message,
-            metadata={"source": "chat", "confidence": metrics.confidence}
+            extra_data={"source": "chat", "confidence": metrics.confidence}
         )
         db.add(mood_entry)
         await db.commit()

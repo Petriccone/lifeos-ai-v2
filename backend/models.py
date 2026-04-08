@@ -71,10 +71,10 @@ class MoodEntry(Base):
     # AI embedding for similarity search (pgvector)
     embedding: Mapped[Optional[List[float]]] = mapped_column(ARRAY(Float), nullable=True)
     
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # Extra data
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", back_populates="mood_entries")
 
@@ -98,9 +98,9 @@ class WorkoutSession(Base):
     calories_burned: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     average_heart_rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", back_populates="workout_sessions")
     exercises = relationship("WorkoutExercise", back_populates="session", cascade="all, delete-orphan")
@@ -171,11 +171,11 @@ class Task(Base):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # Extra data
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", back_populates="tasks")
 
