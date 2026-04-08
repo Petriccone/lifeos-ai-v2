@@ -158,14 +158,14 @@ async def get_current_user(
         )
 
 
-def get_optional_user(
+async def get_optional_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_async_db)
 ) -> Optional[User]:
     """Optional user authentication for public endpoints."""
     if not credentials:
         return None
-    
+
     try:
         return await get_current_user(credentials, db)
     except HTTPException:
