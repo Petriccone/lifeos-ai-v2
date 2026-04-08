@@ -1,64 +1,96 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dumbbell, Plus, Clock, Activity, Target, Zap } from "lucide-react";
+import { isAuthenticated, getWorkouts, createWorkout } from "../../lib/api";
 
-interface Exercise {
+interface WorkoutSession {
   id: string;
   name: string;
-  sets: number;
-  reps: number;
-  weight_kg: number;
-}
-
-interface Workout {
-  id: string;
-  date: string;
   workout_type: string;
+  started_at: string;
   duration_minutes: number;
-  exercises: Exercise[];
+  exercises?: { name: string; sets: any[]; notes?: string }[];
 }
 
 export default function WorkoutsPage() {
-  const [workouts, setWorkouts] = useState<Workout[]>([
-    {
-      id: "1",
-      date: "2026-04-07",
-      workout_type: "Push Day",
-      duration_minutes: 65,
-      exercises: [
-        { id: "1", name: "Bench Press", sets: 4, reps: 10, weight_kg: 60 },
-        { id: "2", name: "Shoulder Press", sets: 3, reps: 12, weight_kg: 40 },
-        { id: "3", name: "Tricep Dips", sets: 3, reps: 15, weight_kg: 0 },
-      ],
-    },
-    {
-      id: "2",
-      date: "2026-04-05",
-      workout_type: "Pull Day",
-      duration_minutes: 55,
-      exercises: [
-        { id: "4", name: "Deadlift", sets: 4, reps: 8, weight_kg: 100 },
-        { id: "5", name: "Pull-ups", sets: 3, reps: 10, weight_kg: 10 },
-        { id: "6", name: "Barbell Rows", sets: 3, reps: 12, weight_kg: 50 },
-      ],
-    },
-  ]);
-
+  const [workouts, setWorkouts] = useState<WorkoutSession[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddWorkout, setShowAddWorkout] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newWorkout, setNewWorkout] = useState({
     workout_type: "",
+    name: "",
     duration_minutes: 60,
-    exercises: [] as Exercise[],
   });
 
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      setLoading(false);
+      return;
+    }
+    fetchWorkouts();
+  }, []);
+
+  const fetchWorkouts = async () => {
+    try {
+      const data = await getWorkouts(30);
+      setWorkouts(data || []);
+    } catch {
+      setWorkouts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveWorkout = async () => {
+    if (!newWorkout.workout_type) return;
+    setSaving(true);
+    try {
+      await createWorkout({
+        name: newWorkout.name || newWorkout.workout_type,
+        workout_type: newWorkout.workout_type.toLowerCase().replace(" ", "_"),
+        duration_minutes: newWorkout.duration_minutes,
+      });
+      setShowAddWorkout(false);
+      setNewWorkout({ workout_type: "", name: "", duration_minutes: 60 });
+      fetchWorkouts();
+    } catch {
+      alert("Erro ao salvar workout");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const totalMinutes = workouts.reduce((acc, w) => acc + (w.duration_minutes || 0), 0);
+  const totalExercises = workouts.reduce((acc, w) => acc + (w.exercises?.length || 0), 0);
+
   const workoutTypes = [
-    { id: "push", name: "Push Day", icon: "💪" },
-    { id: "pull", name: "Pull Day", icon: "🏋️" },
-    { id: "legs", name: "Leg Day", icon: "🦵" },
-    { id: "cardio", name: "Cardio", icon: "🏃" },
-    { id: "custom", name: "Custom", icon: "✨" },
+    { id: "push", name: "Push Day", icon: "\uD83D\uDCAA" },
+    { id: "pull", name: "Pull Day", icon: "\uD83C\uDFCB\uFE0F" },
+    { id: "legs", name: "Leg Day", icon: "\uD83E\uDDB5" },
+    { id: "cardio", name: "Cardio", icon: "\uD83C\uDFC3" },
+    { id: "custom", name: "Custom", icon: "\u2728" },
   ];
+
+  const getWorkoutIcon = (type: string) => {
+    if (type?.toLowerCase().includes("push")) return "\uD83D\uDCAA";
+    if (type?.toLowerCase().includes("pull")) return "\uD83C\uDFCB\uFE0F";
+    if (type?.toLowerCase().includes("leg")) return "\uD83E\uDDB5";
+    if (type?.toLowerCase().includes("cardio")) return "\uD83C\uDFC3";
+    return "\u2728";
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-12 min-h-[60vh]">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <Dumbbell className="w-8 h-8 text-orange-400" />
+          <p className="text-white/50 text-sm">Loading workouts...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-6xl mx-auto pb-32 md:pb-8">
@@ -84,16 +116,12 @@ export default function WorkoutsPage() {
         </div>
         <div className="glass-panel rounded-2xl p-6 text-center shadow-sm">
           <Clock className="w-5 h-5 text-blue-400 mx-auto mb-2" />
-          <p className="text-3xl font-bold text-white">
-            {workouts.reduce((acc, w) => acc + (w.duration_minutes || 0), 0)}
-          </p>
+          <p className="text-3xl font-bold text-white">{totalMinutes}</p>
           <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">Minutes</p>
         </div>
         <div className="glass-panel rounded-2xl p-6 text-center shadow-sm">
           <Activity className="w-5 h-5 text-purple-400 mx-auto mb-2" />
-          <p className="text-3xl font-bold text-white">
-            {workouts.reduce((acc, w) => acc + w.exercises.length, 0)}
-          </p>
+          <p className="text-3xl font-bold text-white">{totalExercises}</p>
           <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">Exercises</p>
         </div>
       </div>
@@ -111,19 +139,19 @@ export default function WorkoutsPage() {
          </button>
       )}
 
-      {/* Add Workout Form (Glassmorphic) */}
+      {/* Add Workout Form */}
       {showAddWorkout && (
         <div className="glass-panel rounded-3xl p-6 md:p-8 animate-fadeIn border-t border-l border-white/10 shadow-2xl">
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-lg font-semibold flex items-center gap-2"><Zap className="w-5 h-5 text-orange-400" /> Select Routine</h3>
-             <button onClick={() => setShowAddWorkout(false)} className="text-gray-400 hover:text-white transition-colors">✕</button>
+             <button onClick={() => setShowAddWorkout(false)} className="text-gray-400 hover:text-white transition-colors">{"\u2715"}</button>
           </div>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {workoutTypes.map((type) => (
               <button
                 key={type.id}
-                onClick={() => setNewWorkout({ ...newWorkout, workout_type: type.name })}
+                onClick={() => setNewWorkout({ ...newWorkout, workout_type: type.name, name: type.name })}
                 className={`p-4 rounded-2xl border transition-all duration-300 ${
                   newWorkout.workout_type === type.name
                     ? "border-orange-500 bg-orange-500/10 shadow-[0_0_20px_rgba(249,115,22,0.2)]"
@@ -143,7 +171,7 @@ export default function WorkoutsPage() {
                 <input
                   type="number"
                   value={newWorkout.duration_minutes}
-                  onChange={(e) => setNewWorkout({ ...newWorkout, duration_minutes: parseInt(e.target.value) })}
+                  onChange={(e) => setNewWorkout({ ...newWorkout, duration_minutes: parseInt(e.target.value) || 0 })}
                   className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 pr-4 py-4 focus:outline-none focus:border-orange-500 focus:bg-black/60 transition-colors text-white"
                 />
              </div>
@@ -156,8 +184,12 @@ export default function WorkoutsPage() {
             >
               Cancel
             </button>
-            <button className="flex-1 py-4 rounded-xl bg-gradient-to-r from-orange-400 to-red-500 text-white font-medium shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all hover:-translate-y-0.5">
-              Save Session
+            <button
+              onClick={handleSaveWorkout}
+              disabled={!newWorkout.workout_type || saving}
+              className="flex-1 py-4 rounded-xl bg-gradient-to-r from-orange-400 to-red-500 text-white font-medium shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Session"}
             </button>
           </div>
         </div>
@@ -166,17 +198,20 @@ export default function WorkoutsPage() {
       {/* Workout History */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-white/90">Recent Sessions</h2>
+        {workouts.length === 0 && (
+          <p className="text-gray-500 text-sm text-center py-8">Nenhum workout registrado ainda. Comece logando uma sessao!</p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            {workouts.map((workout) => (
              <div key={workout.id} className="glass-card hover:bg-white/[0.03] p-6 !rounded-3xl border border-white/5 group">
                <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
                  <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                       {workout.workout_type.includes('Push') ? '💪' : workout.workout_type.includes('Pull') ? '🏋️' : '🏃'}
+                       {getWorkoutIcon(workout.workout_type || workout.name)}
                     </div>
                     <div>
-                       <h3 className="font-semibold text-white group-hover:text-orange-400 transition-colors">{workout.workout_type}</h3>
-                       <p className="text-xs text-gray-500">{workout.date}</p>
+                       <h3 className="font-semibold text-white group-hover:text-orange-400 transition-colors">{workout.name || workout.workout_type}</h3>
+                       <p className="text-xs text-gray-500">{workout.started_at ? new Date(workout.started_at).toLocaleDateString() : ""}</p>
                     </div>
                  </div>
                  <div className="text-right flex flex-col items-end">
@@ -184,20 +219,18 @@ export default function WorkoutsPage() {
                  </div>
                </div>
 
-               {/* Exercises */}
-               <div className="space-y-3">
-                 {workout.exercises.map((ex) => (
-                   <div key={ex.id} className="flex items-center gap-3 text-sm group/item">
-                     <div className="w-12 h-8 rounded-lg bg-black/40 border border-white/5 flex items-center justify-center text-[11px] font-mono text-gray-400">
-                       {ex.sets}x{ex.reps}
+               {workout.exercises && workout.exercises.length > 0 && (
+                 <div className="space-y-3">
+                   {workout.exercises.map((ex, i) => (
+                     <div key={i} className="flex items-center gap-3 text-sm">
+                       <div className="w-12 h-8 rounded-lg bg-black/40 border border-white/5 flex items-center justify-center text-[11px] font-mono text-gray-400">
+                         {ex.sets?.length || 0}sets
+                       </div>
+                       <span className="flex-1 text-gray-300">{ex.name}</span>
                      </div>
-                     <span className="flex-1 text-gray-300 group-hover/item:text-white transition-colors">{ex.name}</span>
-                     {ex.weight_kg > 0 && (
-                       <span className="text-gray-500 text-xs font-mono">{ex.weight_kg}kg</span>
-                     )}
-                   </div>
-                 ))}
-               </div>
+                   ))}
+                 </div>
+               )}
              </div>
            ))}
         </div>

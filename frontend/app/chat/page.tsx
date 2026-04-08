@@ -1,19 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, Sparkles, User, Activity, MoreHorizontal, Check } from "lucide-react";
+import { Send, Sparkles, User, Activity, MoreHorizontal, Check } from "lucide-react";
+import { isAuthenticated, sendChatMessage } from "../../lib/api";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  moodDetected?: {
-    anxiety?: number;
-    happiness?: number;
-    wellness?: number;
-    sleep?: number;
-    recovery?: number;
-  };
+  moodDetected?: Record<string, number>;
 }
 
 export default function ChatPage() {
@@ -21,14 +16,13 @@ export default function ChatPage() {
     {
       id: "0",
       role: "assistant",
-      content: "Hey, Rafael! I'm LifeOS AI. ✨\nTell me how you're feeling right now or ask me to analyze your weekly metrics. I'm here to support your goals.",
+      content: "Hey, Rafael! I'm LifeOS AI.\nTell me how you're feeling right now or ask me to analyze your weekly metrics. I'm here to support your goals.",
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on new message
   useEffect(() => {
      if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -45,51 +39,55 @@ export default function ChatPage() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput("");
     setLoading(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const responses = [
-        "I hear you! Taking note of that. Based on your current recovery levels, it might be beneficial to focus on low-impact activities today.",
-        "That's a fantastic perspective. I'll log this boost in your happiness metrics. Keep riding this momentum! 💪",
-        "It's completely normal to feel overwhelmed. Would you like me to guide you through a 2-minute breathing exercise?",
-      ];
+    try {
+      if (!isAuthenticated()) {
+        throw new Error("Not authenticated");
+      }
 
-      const moodDetected = {
-        anxiety: Math.random() * 0.3,
-        happiness: 0.6 + Math.random() * 0.4,
-        wellness: 0.7 + Math.random() * 0.3,
-      };
+      const history = messages
+        .filter((m) => m.id !== "0")
+        .map((m) => ({ role: m.role, content: m.content }));
+      history.push({ role: "user", content: currentInput });
+
+      const data = await sendChatMessage(currentInput, history);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: responses[Math.floor(Math.random() * responses.length)],
-        moodDetected,
+        content: data.response,
+        moodDetected: data.mood_detected || undefined,
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+    } catch {
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Desculpe, nao consegui conectar ao servidor. Verifique se o backend esta rodando.",
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+    } finally {
       setLoading(false);
-    }, 1800);
+    }
   };
 
   const quickActions = [
-    "I'm feeling stressed 😰", 
-    "Had a great workout! 💪", 
-    "Log a sleep of 8 hours 😴", 
-    "Give me daily insights 📊"
+    "I'm feeling stressed",
+    "Had a great workout!",
+    "How was my week?",
+    "Give me daily insights"
   ];
 
   return (
     <div className="flex flex-col max-h-[85vh] md:max-h-[85vh] h-[85vh] w-full max-w-4xl mx-auto p-4 md:p-8">
-      {/* Premium Chat Container */}
       <div className="glass-panel flex-1 rounded-3xl border border-white/10 flex flex-col overflow-hidden shadow-2xl relative bg-black/40">
-         
-         {/* Top Header Blur Effect */}
+
          <div className="absolute top-0 w-full h-32 bg-gradient-to-b from-[#0a0a0f] to-transparent z-10 pointer-events-none" />
 
-         {/* Header */}
          <header className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02] relative z-20 backdrop-blur-md">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.5)]">
@@ -105,12 +103,10 @@ export default function ChatPage() {
            </button>
          </header>
 
-         {/* Chat Area */}
          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 relative z-0 scrollbar-hide">
            {messages.map((message) => (
              <div key={message.id} className={`flex gap-4 ${message.role === "user" ? "flex-row-reverse" : ""} animate-fadeIn`}>
-               
-               {/* Avatar */}
+
                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                  message.role === "assistant"
                    ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md"
@@ -119,7 +115,6 @@ export default function ChatPage() {
                  {message.role === "assistant" ? <Sparkles className="w-5 h-5 text-white" /> : <User className="w-5 h-5 text-gray-300" />}
                </div>
 
-               {/* Message Bubble container */}
                <div className={`flex flex-col gap-2 max-w-[85%] md:max-w-[70%] ${message.role === "user" ? "items-end" : "items-start"}`}>
                   <div className={`p-4 text-sm leading-relaxed ${
                     message.role === "assistant"
@@ -131,29 +126,27 @@ export default function ChatPage() {
                     ))}
                   </div>
 
-                  {/* Optional Mood Detected */}
                   {message.moodDetected && (
                      <div className="mt-1 p-3 rounded-2xl bg-black/40 border border-white/5 flex gap-3 text-[10px] items-center animate-fadeIn">
                         <Activity className="w-3 h-3 text-emerald-400" />
-                        <span className="text-gray-400 uppercase tracking-widest font-medium">Telemetry Detected:</span>
+                        <span className="text-gray-400 uppercase tracking-widest font-medium">Mood Detected</span>
                         {Object.entries(message.moodDetected).map(([k, v]) => (
                            <div key={k} className="flex items-center gap-1">
                               <span className="text-gray-500 capitalize">{k}</span>
-                              <span className="text-indigo-300">{Math.round((v || 0) * 100)}%</span>
+                              <span className="text-indigo-300">{typeof v === 'number' ? Math.round(v) : v}%</span>
                            </div>
                         ))}
                      </div>
                   )}
 
                   <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-1">
-                    {message.role === "user" ? <Check className="w-3 h-3" /> : null} 
+                    {message.role === "user" ? <Check className="w-3 h-3" /> : null}
                     Just now
                   </span>
                </div>
              </div>
            ))}
 
-           {/* Loading state indicator */}
            {loading && (
              <div className="flex gap-4 animate-fadeIn">
                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
@@ -170,10 +163,8 @@ export default function ChatPage() {
            )}
          </div>
 
-         {/* Bottom Action Area */}
          <div className="p-4 md:p-6 bg-white/[0.02] border-t border-white/5 backdrop-blur-xl relative z-20">
-           
-           {/* Quick Suggestion Chips */}
+
            <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide pb-2">
              {quickActions.map((phrase) => (
                <button
@@ -186,7 +177,6 @@ export default function ChatPage() {
              ))}
            </div>
 
-           {/* Input Box */}
            <div className="relative group">
              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur-md opacity-0 group-focus-within:opacity-100 transition-opacity" />
              <div className="relative flex gap-2 w-full">
