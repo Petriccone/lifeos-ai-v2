@@ -79,9 +79,9 @@ export default function RootLayout({
           {/* Mobile bottom nav */}
           <nav className="md:hidden fixed bottom-0 w-full p-4 z-40">
              <div className="glass-panel w-full rounded-2xl flex justify-around items-center p-3 border border-white/10 shadow-2xl">
-                <a href="#" className="flex flex-col items-center text-indigo-400 gap-1"><LayoutDashboard className="w-5 h-5" /><span className="text-[10px]">Home</span></a>
-                <a href="#" className="flex flex-col items-center text-gray-400 gap-1"><BarChart3 className="w-5 h-5" /><span className="text-[10px]">Stats</span></a>
-                <a href="#" className="flex flex-col items-center text-gray-400 gap-1"><CheckSquare className="w-5 h-5" /><span className="text-[10px]">Tasks</span></a>
+                <a href="/" className="flex flex-col items-center text-indigo-400 gap-1"><LayoutDashboard className="w-5 h-5" /><span className="text-[10px]">Home</span></a>
+                <a href="/workouts" className="flex flex-col items-center text-gray-400 gap-1"><BarChart3 className="w-5 h-5" /><span className="text-[10px]">Stats</span></a>
+                <a href="/chat" className="flex flex-col items-center text-gray-400 gap-1"><CheckSquare className="w-5 h-5" /><span className="text-[10px]">Tasks</span></a>
              </div>
           </nav>
         </div>

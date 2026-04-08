@@ -99,10 +99,14 @@ export default function DashboardPage() {
            </div>
            
            <div className="flex flex-col items-center justify-center py-6 relative flex-1">
-               <div className="absolute inset-0 border-[8px] border-white/5 rounded-full w-44 h-44 m-auto" />
-               <div className="absolute inset-0 border-[8px] border-emerald-400 rounded-full w-44 h-44 m-auto border-t-transparent border-l-transparent transform -rotate-45 transition-all duration-1000" />
-               <div className="text-5xl font-bold text-white mb-1 relative z-10 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">{healthData?.mood_score}</div>
-               <span className="text-xs text-gray-400 relative z-10">/100</span>
+               <div className="relative w-44 h-44 flex items-center justify-center">
+                 <div className="absolute inset-0 border-[8px] border-white/5 rounded-full" />
+                 <div className="absolute inset-0 border-[8px] border-emerald-400 rounded-full border-t-transparent border-l-transparent transform -rotate-45 transition-all duration-1000" />
+                 <div className="flex flex-col items-center z-10">
+                   <div className="text-5xl font-bold text-white mb-1 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">{healthData?.mood_score}</div>
+                   <span className="text-xs text-gray-400">/100</span>
+                 </div>
+               </div>
            </div>
 
            <div className="flex gap-2 relative z-10 w-full mt-4">
