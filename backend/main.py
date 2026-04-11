@@ -41,8 +41,11 @@ from ai_agents import (
 # Database - async for Supabase
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if not DATABASE_URL:
-    # Fallback for local dev - Supabase uses postgresql://
-    DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/lifeos")
+    # In production (Railway, Vercel, etc) fail fast instead of silently falling back
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("VERCEL"):
+        raise RuntimeError("DATABASE_URL is required in production")
+    # Local dev fallback
+    DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL", "sqlite:///./lifeos.db")
 
 # JWT Configuration
 JWT_SECRET = os.getenv("JWT_SECRET", os.getenv("SUPABASE_JWT_SECRET", "your-secret-key"))
@@ -55,28 +58,35 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 # Database Setup
 # =============================================================================
 
-# Async engine for Supabase
+# Normalize DATABASE_URL for async and sync drivers
 if DATABASE_URL.startswith("postgresql://"):
     async_database_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    sync_database_url = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+    _engine_kwargs = {"pool_pre_ping": True}
+elif DATABASE_URL.startswith("sqlite:///"):
+    async_database_url = DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+    sync_database_url = DATABASE_URL
+    _engine_kwargs = {}
 else:
     async_database_url = DATABASE_URL
+    sync_database_url = DATABASE_URL
+    _engine_kwargs = {"pool_pre_ping": True}
 
 # Create async engine
 async_engine = create_async_engine(
     async_database_url,
     echo=False,
-    pool_pre_ping=True
+    **_engine_kwargs
 )
 
 # Async session factory
 async_session_maker = sessionmaker(
-    async_engine, 
-    class_=AsyncSession, 
+    async_engine,
+    class_=AsyncSession,
     expire_on_commit=False
 )
 
 # Sync engine for development
-sync_database_url = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1) if "postgresql://" in DATABASE_URL else DATABASE_URL
 sync_engine = create_engine(sync_database_url, echo=False)
 SyncSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
@@ -240,15 +250,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration
+# CORS configuration (env-driven, comma-separated list)
+_cors_default = "http://localhost:3000,https://lifeos.ai"
+_cors_env = os.getenv("CORS_ORIGINS", _cors_default)
+cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://lifeos.ai",
-        "https://*.vercel.app",
-        "https://*.netlify.app"
-    ],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.up\.railway\.app|https://.*\.vercel\.app|https://.*\.netlify\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

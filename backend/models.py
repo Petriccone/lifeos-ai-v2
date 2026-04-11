@@ -6,16 +6,24 @@ SQLAlchemy models for PostgreSQL + pgvector on Supabase
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
-    Column, String, Integer, Float, DateTime, Boolean, 
+    Column, String, Integer, Float, DateTime, Boolean,
     ForeignKey, Text, JSON, Enum as SQLEnum
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB as PG_JSONB, ARRAY as PG_ARRAY
 import uuid
 import enum
 
 Base = declarative_base()
+
+# Cross-DB compatible types: Postgres uses native UUID/JSONB/ARRAY,
+# SQLite falls back to String(36)/JSON for portability.
+UUID = PG_UUID(as_uuid=True).with_variant(String(36), "sqlite")
+JSONB = PG_JSONB().with_variant(JSON(), "sqlite")
+# ARRAY has no SQLite equivalent — use JSON as fallback
+ARRAY_FLOAT = PG_ARRAY(Float).with_variant(JSON(), "sqlite")
+ARRAY_STRING = PG_ARRAY(String).with_variant(JSON(), "sqlite")
 
 
 class TaskPriority(str, enum.Enum):
@@ -35,7 +43,7 @@ class TaskStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     supabase_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
@@ -52,8 +60,8 @@ class User(Base):
 class MoodEntry(Base):
     __tablename__ = "mood_entries"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     
     # Mood metrics (0-100 scale, anxiety inverted)
@@ -69,7 +77,7 @@ class MoodEntry(Base):
     conversation_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # AI embedding for similarity search (pgvector)
-    embedding: Mapped[Optional[List[float]]] = mapped_column(ARRAY(Float), nullable=True)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(ARRAY_FLOAT, nullable=True)
     
     # Extra data
     extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
@@ -82,8 +90,8 @@ class MoodEntry(Base):
 class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -109,14 +117,14 @@ class WorkoutSession(Base):
 class Exercise(Base):
     __tablename__ = "exercises"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     muscle_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     equipment: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     exercise_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # compound, isolation, cardio
     
     # AI embedding for exercise similarity
-    embedding: Mapped[Optional[List[float]]] = mapped_column(ARRAY(Float), nullable=True)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(ARRAY_FLOAT, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
@@ -127,9 +135,9 @@ class Exercise(Base):
 class WorkoutExercise(Base):
     __tablename__ = "workout_exercises"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("workout_sessions.id"), nullable=False, index=True)
-    exercise_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("exercises.id"), nullable=False)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[str] = mapped_column(UUID, ForeignKey("workout_sessions.id"), nullable=False, index=True)
+    exercise_id: Mapped[str] = mapped_column(UUID, ForeignKey("exercises.id"), nullable=False)
     
     order: Mapped[int] = mapped_column(Integer, default=0)
     
@@ -156,8 +164,8 @@ class WorkoutExercise(Base):
 class Task(Base):
     __tablename__ = "tasks"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -183,8 +191,8 @@ class Task(Base):
 class DailyBrief(Base):
     __tablename__ = "daily_briefs"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     
     # Brief content
@@ -197,7 +205,7 @@ class DailyBrief(Base):
     metrics_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     
     # Recommendations
-    recommendations: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
+    recommendations: Mapped[Optional[List[str]]] = mapped_column(ARRAY_STRING, nullable=True)
     
     # AI model used
     model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
