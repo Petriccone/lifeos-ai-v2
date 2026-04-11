@@ -12,13 +12,17 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy import create_engine, desc, and_
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
+from passlib.context import CryptContext
 import httpx
+
+# Password hashing context (module-level)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Import models and agents
 from models import (
@@ -217,6 +221,38 @@ class MetricsSummary(BaseModel):
     count: int
 
 
+class AiWorkoutRequest(BaseModel):
+    goal: str = Field("hypertrophy", description="strength, hypertrophy, fat_loss, endurance")
+    level: str = Field("intermediate", description="beginner, intermediate, advanced")
+    duration_minutes: int = Field(60, ge=10, le=180)
+    workout_type: str = Field("push", description="push, pull, legs, full_body, cardio, upper, lower")
+    equipment: List[str] = Field(default_factory=lambda: ["barbell", "dumbbell", "machine", "bodyweight", "cable"])
+    notes: Optional[str] = Field(None, description="Free-text context like injuries, preferences, previous session")
+
+
+class AiSetSuggestion(BaseModel):
+    reps: int
+    weight: float
+    rpe: Optional[float] = None
+
+
+class AiExerciseSuggestion(BaseModel):
+    exercise_id: Optional[str] = None
+    name: str
+    muscle_group: Optional[str] = None
+    sets: List[AiSetSuggestion]
+    notes: Optional[str] = None
+
+
+class AiWorkoutResponse(BaseModel):
+    name: str
+    workout_type: str
+    duration_minutes: int
+    notes: Optional[str]
+    exercises: List[AiExerciseSuggestion]
+    model: str
+
+
 # =============================================================================
 # Lifespan
 # =============================================================================
@@ -291,58 +327,106 @@ async def health_check_v1():
 # Auth Routes
 # =============================================================================
 
-@app.post("/api/v1/auth/register")
-async def register(
-    email: str,
-    name: Optional[str] = None,
-    db: AsyncSession = Depends(get_async_db)
-):
-    """Register a new user."""
-    from sqlalchemy import select
-    
-    # Check if email exists
-    result = await db.execute(select(User).where(User.email == email))
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
-    # Create user
-    user = User(email=email, name=name)
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    return {"id": str(user.id), "email": user.email, "name": user.name}
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    name: Optional[str] = None
 
 
-@app.post("/api/v1/auth/token")
-async def get_token(
-    email: str,
-    db: AsyncSession = Depends(get_async_db)
-):
-    """Get JWT token for a user (simplified auth for demo)."""
-    from sqlalchemy import select
-    
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Create JWT
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: dict  # {id, email, name}
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: Optional[str]
+
+
+def _create_access_token(user: User) -> str:
+    """Create a 30-day JWT for the given user."""
     token_data = {
         "sub": str(user.id),
         "email": user.email,
-        "exp": datetime.utcnow() + timedelta(days=30)
+        "exp": datetime.utcnow() + timedelta(days=30),
     }
-    token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    
-    return {"access_token": token, "token_type": "bearer", "user_id": str(user.id)}
+    return jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+@app.post("/api/v1/auth/register", response_model=AuthResponse)
+async def register(
+    payload: RegisterRequest,
+    db: AsyncSession = Depends(get_async_db),
+) -> AuthResponse:
+    """Register a new user with email + password and return a JWT (auto-login)."""
+    from sqlalchemy import select
+
+    # Check if email exists
+    result = await db.execute(select(User).where(User.email == payload.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
+
+    # Hash password and create user
+    user = User(
+        email=payload.email,
+        name=payload.name,
+        password_hash=pwd_context.hash(payload.password),
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    token = _create_access_token(user)
+    return AuthResponse(
+        access_token=token,
+        token_type="bearer",
+        user={"id": str(user.id), "email": user.email, "name": user.name},
+    )
+
+
+@app.post("/api/v1/auth/login", response_model=AuthResponse)
+async def login(
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_async_db),
+) -> AuthResponse:
+    """Authenticate a user with email + password and return a JWT."""
+    from sqlalchemy import select
+
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.password_hash or not pwd_context.verify(
+        payload.password, user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    token = _create_access_token(user)
+    return AuthResponse(
+        access_token=token,
+        token_type="bearer",
+        user={"id": str(user.id), "email": user.email, "name": user.name},
+    )
+
+
+@app.get("/api/v1/auth/me", response_model=UserResponse)
+async def get_me(
+    user: User = Depends(get_current_user),
+) -> UserResponse:
+    """Return the currently authenticated user."""
+    return UserResponse(id=str(user.id), email=user.email, name=user.name)
 
 
 # =============================================================================
@@ -648,6 +732,207 @@ async def get_workout(
         "notes": session.notes,
         "exercises": exercises
     }
+
+
+# =============================================================================
+# AI Workout Generator
+# =============================================================================
+
+@app.post("/api/v1/workouts/ai-generate", response_model=AiWorkoutResponse)
+async def ai_generate_workout(
+    request: AiWorkoutRequest,
+    db: AsyncSession = Depends(get_async_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Generate a personalized workout plan via Claude (OpenRouter).
+
+    The model receives the user's exercise library (so it only picks names
+    that exist) plus goal/level/equipment/duration and returns a structured
+    JSON plan. We then match names back to library IDs before responding.
+    """
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AI service not configured",
+        )
+
+    from sqlalchemy import select
+
+    # Load library scoped to the user's equipment selection
+    library_result = await db.execute(select(Exercise))
+    library = library_result.scalars().all()
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Exercise library is empty. Seed exercises first.",
+        )
+
+    equipment_set = {e.lower() for e in request.equipment}
+    available = [
+        ex
+        for ex in library
+        if not ex.equipment or ex.equipment.lower() in equipment_set
+    ]
+    if not available:
+        available = list(library)  # fall back to full library if filter empties
+
+    # Build a compact library listing for the prompt
+    library_lines = [
+        f"- {ex.name} | muscle: {ex.muscle_group or 'general'} | equip: {ex.equipment or 'any'} | type: {ex.exercise_type or 'general'}"
+        for ex in available
+    ]
+    library_text = "\n".join(library_lines)
+
+    # Recent workout context (last 5) so the AI can progress the user
+    history_result = await db.execute(
+        select(WorkoutSession)
+        .where(WorkoutSession.user_id == user.id)
+        .order_by(desc(WorkoutSession.started_at))
+        .limit(5)
+    )
+    recent_sessions = history_result.scalars().all()
+    history_lines = [
+        f"- {s.workout_type or 'workout'} ({s.duration_minutes or 0}min)"
+        + (f": {s.notes}" if s.notes else "")
+        for s in recent_sessions
+    ]
+    history_text = "\n".join(history_lines) if history_lines else "(no previous sessions)"
+
+    system_prompt = """You are an expert strength and conditioning coach.
+You design personalized workout plans using ONLY exercises from the provided library.
+You always respond with valid JSON matching the exact schema given - no prose, no markdown fences.
+You pick exercises that match the user's goal, level, available equipment, and time budget.
+You set realistic weights in kilograms based on the level (beginner: light, intermediate: moderate, advanced: heavy).
+For bodyweight exercises, use weight=0."""
+
+    user_prompt = f"""Generate a {request.workout_type.upper()} workout.
+
+USER PROFILE:
+- Goal: {request.goal}
+- Level: {request.level}
+- Time budget: {request.duration_minutes} minutes
+- Equipment available: {", ".join(request.equipment)}
+- Extra notes: {request.notes or "none"}
+
+RECENT SESSIONS:
+{history_text}
+
+EXERCISE LIBRARY (use ONLY names from this list, matching exactly):
+{library_text}
+
+RESPONSE FORMAT (strict JSON, no markdown):
+{{
+  "name": "Short session title",
+  "workout_type": "{request.workout_type}",
+  "duration_minutes": {request.duration_minutes},
+  "notes": "One-line coaching cue or progression tip",
+  "exercises": [
+    {{
+      "name": "exact name from library",
+      "sets": [
+        {{"reps": 8, "weight": 60.0, "rpe": 7}},
+        {{"reps": 8, "weight": 60.0, "rpe": 7}},
+        {{"reps": 8, "weight": 60.0, "rpe": 8}}
+      ],
+      "notes": "optional form cue"
+    }}
+  ]
+}}
+
+Rules:
+- Pick 4-7 exercises for strength/hypertrophy, 3-5 for cardio/full body
+- Compound movements first, then isolation
+- 3-5 sets per exercise for strength/hypertrophy
+- Weights in kilograms, realistic for the level
+- For bodyweight movements use weight=0
+- Keep the whole plan within the time budget ({request.duration_minutes} min including rest)
+- Return ONLY the JSON object, nothing else"""
+
+    client = OpenRouterClient(api_key=OPENROUTER_API_KEY)
+    ai_response = await client.chat(
+        messages=[{"role": "user", "content": user_prompt}],
+        system=system_prompt,
+        temperature=0.5,
+        max_tokens=2000,
+    )
+
+    raw_content = ai_response.content.strip()
+    # Strip ``` fences if Claude ignored instructions
+    if raw_content.startswith("```"):
+        lines = raw_content.splitlines()
+        # Drop the first fence line and any language tag, and the closing fence
+        raw_content = "\n".join(
+            ln for ln in lines[1:] if not ln.strip().startswith("```")
+        )
+    # Some models prepend prose — try to locate the first `{` and last `}`
+    first_brace = raw_content.find("{")
+    last_brace = raw_content.rfind("}")
+    if first_brace >= 0 and last_brace > first_brace:
+        raw_content = raw_content[first_brace : last_brace + 1]
+
+    import json as _json
+    try:
+        parsed = _json.loads(raw_content)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI returned invalid JSON: {e}",
+        )
+
+    # Build name → id map for library lookup (case insensitive)
+    name_to_id = {ex.name.lower(): (str(ex.id), ex.muscle_group) for ex in library}
+
+    raw_exercises = parsed.get("exercises") or []
+    exercises: List[AiExerciseSuggestion] = []
+    for ex in raw_exercises:
+        name = str(ex.get("name", "")).strip()
+        if not name:
+            continue
+        match = name_to_id.get(name.lower())
+        exercise_id, muscle_group = match if match else (None, None)
+
+        sets_raw = ex.get("sets") or []
+        sets: List[AiSetSuggestion] = []
+        for s in sets_raw:
+            try:
+                sets.append(
+                    AiSetSuggestion(
+                        reps=int(s.get("reps", 0) or 0),
+                        weight=float(s.get("weight", 0) or 0),
+                        rpe=(float(s["rpe"]) if s.get("rpe") is not None else None),
+                    )
+                )
+            except (ValueError, TypeError):
+                continue
+
+        if not sets:
+            continue
+
+        exercises.append(
+            AiExerciseSuggestion(
+                exercise_id=exercise_id,
+                name=name,
+                muscle_group=muscle_group,
+                sets=sets,
+                notes=ex.get("notes"),
+            )
+        )
+
+    if not exercises:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI response had no usable exercises",
+        )
+
+    return AiWorkoutResponse(
+        name=str(parsed.get("name", f"{request.workout_type.title()} Session")),
+        workout_type=str(parsed.get("workout_type", request.workout_type)),
+        duration_minutes=int(parsed.get("duration_minutes", request.duration_minutes)),
+        notes=parsed.get("notes"),
+        exercises=exercises,
+        model=ai_response.model,
+    )
 
 
 # =============================================================================

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import AppShell from "../components/AppShell";
 import "./globals.css";
+import { AuthProvider } from "@/lib/AuthContext";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "LifeOS AI - Your Personal Life",
@@ -22,8 +23,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased min-h-screen flex flex-col md:flex-row bg-[#050505]">
-        <AppShell>{children}</AppShell>
+      <body className="antialiased min-h-screen bg-[#050505]">
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );

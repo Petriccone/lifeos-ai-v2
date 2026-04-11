@@ -40,3 +40,10 @@ Thumbs.db
 
 # Railway state
 .railway/
+
+# Playwright MCP artifacts and test outputs
+.playwright-mcp/
+workouts-pull-detail.png
+
+# TS build info
+*.tsbuildinfo
