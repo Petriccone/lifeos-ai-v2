@@ -86,7 +86,7 @@ async def get_current_user(
                 detail="Invalid token",
             )
 
-        result = await db.execute(select(User).where(User.id == UUID(user_id)))
+        result = await db.execute(select(User).where(User.id == str(user_id)))
         user = result.scalar_one_or_none()
 
         if not user:

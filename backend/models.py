@@ -15,6 +15,11 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB as PG_JSONB, A
 import uuid
 import enum
 
+
+def _new_uuid() -> str:
+    return str(uuid.uuid4())
+
+
 Base = declarative_base()
 
 # Cross-DB compatible types: Postgres uses native UUID/JSONB/ARRAY,
@@ -43,7 +48,7 @@ class TaskStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -62,7 +67,7 @@ class User(Base):
 class MoodEntry(Base):
     __tablename__ = "mood_entries"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     
@@ -92,7 +97,7 @@ class MoodEntry(Base):
 class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -119,7 +124,7 @@ class WorkoutSession(Base):
 class Exercise(Base):
     __tablename__ = "exercises"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     muscle_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     equipment: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -137,7 +142,7 @@ class Exercise(Base):
 class WorkoutExercise(Base):
     __tablename__ = "workout_exercises"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     session_id: Mapped[str] = mapped_column(UUID, ForeignKey("workout_sessions.id"), nullable=False, index=True)
     exercise_id: Mapped[str] = mapped_column(UUID, ForeignKey("exercises.id"), nullable=False)
     
@@ -166,7 +171,7 @@ class WorkoutExercise(Base):
 class Task(Base):
     __tablename__ = "tasks"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     
     title: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -193,7 +198,7 @@ class Task(Base):
 class HealthMetric(Base):
     __tablename__ = "health_metrics"
 
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
@@ -212,7 +217,7 @@ class HealthMetric(Base):
 class DailyBrief(Base):
     __tablename__ = "daily_briefs"
     
-    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     
