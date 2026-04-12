@@ -1,6 +1,9 @@
 import os
 from typing import Optional
 from uuid import UUID
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
