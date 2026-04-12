@@ -6,6 +6,7 @@ import AppShell from "@/components/AppShell";
 export const metadata: Metadata = {
   title: "LifeOS AI - Your Personal Life",
   description: "Advanced AI-powered personal management.",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
 };
 
 export default function RootLayout({
@@ -23,7 +24,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased min-h-screen bg-[#050505]">
+      <body className="antialiased min-h-screen bg-[#050505] overflow-x-hidden">
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>

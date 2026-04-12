@@ -300,7 +300,7 @@ export default function DashboardPage() {
   const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="p-3 md:p-8 space-y-4 md:space-y-8 max-w-6xl mx-auto pb-28 md:pb-8">
+    <div className="p-3 md:p-8 space-y-4 md:space-y-8 max-w-6xl mx-auto pb-28 md:pb-8 w-full overflow-hidden">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{greeting}, Rafael</h2>
@@ -320,7 +320,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
         <div className="glass-panel rounded-3xl p-5 md:p-6 md:row-span-2 relative overflow-hidden flex flex-col justify-between group h-full min-h-[240px] md:min-h-[300px]">
-          <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/20 blur-3xl rounded-full" />
+          <div className="absolute -right-10 -top-10 w-32 h-32 md:w-40 md:h-40 bg-indigo-500/20 blur-3xl rounded-full pointer-events-none" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
               <HeartPulse className="text-emerald-400 w-5 h-5" />

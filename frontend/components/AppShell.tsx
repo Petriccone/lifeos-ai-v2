@@ -51,7 +51,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const initials = (user.name || user.email).slice(0, 1).toUpperCase();
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
+    <div className="flex flex-col md:flex-row min-h-screen w-full overflow-x-hidden">
       <nav
         className="hidden md:flex w-64 glass-panel border-r border-white/5 flex-col p-6 h-screen sticky top-0 z-40"
         aria-label="Primary navigation"
