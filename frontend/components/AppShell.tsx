@@ -126,10 +126,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="mx-auto w-full min-h-screen">{children}</main>
 
         <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 p-4 z-40"
+          className="md:hidden fixed bottom-0 left-0 right-0 px-3 pb-2 pt-1 z-40"
           aria-label="Mobile primary navigation"
         >
-          <div className="glass-panel w-full rounded-2xl flex justify-around items-center p-3 border border-white/10 shadow-2xl">
+          <div className="glass-panel w-full rounded-2xl flex justify-around items-center py-2 px-1 border border-white/10 shadow-2xl">
             {NAV_ITEMS.map((item) => {
               const active = isActive(pathname, item.href);
               const Icon = item.icon;

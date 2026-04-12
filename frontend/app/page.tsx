@@ -52,7 +52,7 @@ function MiniGauge({
   label: string;
 }) {
   return (
-    <div className="glass-card p-4 flex flex-col justify-between hover:bg-white/[0.08] transition-colors h-28">
+    <div className="glass-card p-3 md:p-4 flex flex-col justify-between hover:bg-white/[0.08] transition-colors h-24 md:h-28">
       <div className="flex items-center justify-between mb-3">
         <Icon className="w-5 h-5" style={{ color }} />
         <span className="text-sm font-semibold">{Math.round(value * 100)}%</span>
@@ -300,7 +300,7 @@ export default function DashboardPage() {
   const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-6xl mx-auto pb-32 md:pb-8">
+    <div className="p-3 md:p-8 space-y-4 md:space-y-8 max-w-6xl mx-auto pb-28 md:pb-8">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{greeting}, Rafael</h2>
@@ -318,8 +318,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-        <div className="glass-panel rounded-3xl p-6 md:row-span-2 relative overflow-hidden flex flex-col justify-between group h-full min-h-[300px]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
+        <div className="glass-panel rounded-3xl p-5 md:p-6 md:row-span-2 relative overflow-hidden flex flex-col justify-between group h-full min-h-[240px] md:min-h-[300px]">
           <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/20 blur-3xl rounded-full" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
@@ -348,30 +348,30 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="flex gap-2 relative z-10 w-full mt-4">
+          <div className="flex gap-2 relative z-10 w-full mt-3">
             <button
               onClick={() => setLogEntryOpen(true)}
-              className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white text-[13px] font-medium transition-all rounded-xl border border-white/5"
+              className="flex-1 py-2.5 md:py-3 bg-white/10 hover:bg-white/20 text-white text-xs md:text-[13px] font-medium transition-all rounded-xl border border-white/5"
             >
               Log Entry
             </button>
             <button
               onClick={handleWatchSync}
-              className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-[13px] font-medium transition-all rounded-xl flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              className="flex-1 py-2.5 md:py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs md:text-[13px] font-medium transition-all rounded-xl flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(16,185,129,0.3)] truncate"
             >
-              <Zap className="w-3.5 h-3.5" /> Xiaomi Sync
+              <Zap className="w-3 h-3 flex-shrink-0" /> Xiaomi Sync
             </button>
           </div>
         </div>
 
-        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
           <MiniGauge value={healthData?.happiness || 0} color="#c084fc" icon={HeartPulse} label="Happiness" />
           <MiniGauge value={healthData?.sleep || 0} color="#60a5fa" icon={Moon} label="Sleep" />
           <MiniGauge value={healthData?.recovery || 0} color="#34d399" icon={BatteryCharging} label="Recovery" />
           <MiniGauge value={healthData?.anxiety || 0} color="#f87171" icon={Activity} label="Stress" />
         </div>
 
-        <div className="glass-panel rounded-3xl p-6 md:col-span-1 flex flex-col h-full min-h-[220px]">
+        <div className="glass-panel rounded-3xl p-5 md:p-6 md:col-span-1 flex flex-col h-full min-h-[180px] md:min-h-[220px]">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-semibold text-white flex items-center gap-2">
               <Target className="w-4 h-4 text-pink-400" /> Priorities
@@ -442,7 +442,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="glass-panel rounded-3xl p-6 md:col-span-1 relative overflow-hidden flex flex-col justify-end min-h-[220px] group border-indigo-500/20">
+        <div className="glass-panel rounded-3xl p-5 md:p-6 md:col-span-1 relative overflow-hidden flex flex-col justify-end min-h-[180px] md:min-h-[220px] group border-indigo-500/20">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 group-hover:from-indigo-500/20 group-hover:to-purple-500/20 transition-all duration-500" />
           <div className="absolute top-6 left-6 w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center shadow-lg">
             <Sparkles className="w-5 h-5 text-indigo-300" />
@@ -463,7 +463,7 @@ export default function DashboardPage() {
       <button
         onClick={() => setChatOpen(true)}
         aria-label="Open assistant"
-        className="fixed bottom-20 right-6 md:bottom-8 md:right-8 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:scale-110 hover:shadow-[0_0_50px_rgba(99,102,241,0.5)] transition-all z-50 group"
+        className="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:scale-110 hover:shadow-[0_0_50px_rgba(99,102,241,0.5)] transition-all z-50 group"
       >
         <MessageSquare className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
       </button>
