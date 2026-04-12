@@ -56,6 +56,7 @@ class User(Base):
     workout_sessions = relationship("WorkoutSession", back_populates="user", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
     daily_briefs = relationship("DailyBrief", back_populates="user", cascade="all, delete-orphan")
+    health_metrics = relationship("HealthMetric", back_populates="user", cascade="all, delete-orphan")
 
 
 class MoodEntry(Base):
@@ -187,6 +188,25 @@ class Task(Base):
 
     # Relationships
     user = relationship("User", back_populates="tasks")
+
+
+class HealthMetric(Base):
+    __tablename__ = "health_metrics"
+
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), nullable=False, index=True)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    metric_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="health_metrics")
 
 
 class DailyBrief(Base):
