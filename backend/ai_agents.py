@@ -524,18 +524,16 @@ When appropriate, suggest actions they might want to take (logging mood, checkin
         """Format context data into a readable string."""
         parts = []
         
-        m = context.get("recent_mood")
+        m = context.get("recent_mood") or {}
         if m:
             parts.append(f"Recent mood: anxiety={m.get('anxiety', '?')}, happiness={m.get('happiness', '?')}")
 
-        tasks = context.get("today_tasks")
+        tasks = context.get("today_tasks") or []
         if tasks:
-            task_list = ", ".join([t['title'] for t in tasks[:3]])
+            task_list = ", ".join([str(t.get('title', '')) for t in tasks[:3]])
             parts.append(f"Today's tasks: {task_list}")
-        else:
-            parts.append("No tasks scheduled for today.")
 
-        w = context.get("recent_workout")
+        w = context.get("recent_workout") or {}
         if w:
             parts.append(f"Last workout: {w.get('name', 'Session')} - {w.get('duration', '?')} min")
         
