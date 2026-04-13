@@ -4,10 +4,13 @@ FastAPI application for LifeOS AI Life Operating System
 """
 
 import os
+import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from uuid import UUID
+
+logger = logging.getLogger("lifeos")
 
 from fastapi import FastAPI, HTTPException, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,7 +35,7 @@ from deps import (
 from mood_detector import MoodDetector, MoodMetrics
 from ai_agents import (
     MoodDetectorAgent, DailyBriefGeneratorAgent,
-    WeeklyInsightsAgent, ChatAgent, OpenRouterClient
+    WeeklyInsightsAgent, ChatAgent, WorkoutIntentExtractor, OpenRouterClient
 )
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -57,6 +60,7 @@ class ChatResponse(BaseModel):
     response: str
     mood_detected: Optional[Dict[str, float]] = None
     suggested_action: Optional[str] = None
+    workout_generated: Optional[Dict[str, Any]] = None
 
 
 class HealthResponse(BaseModel):
@@ -111,19 +115,124 @@ class AiWorkoutResponse(BaseModel):
 # Lifespan
 # =============================================================================
 
+async def seed_exercises():
+    """
+    Populate the exercises table with a curated library of common gym movements.
+
+    Idempotent: skips any exercise whose name already exists.
+    Runs once on startup so the workout generator always has exercises available.
+    """
+    from sqlalchemy import select, func
+    from deps import async_session_maker
+
+    EXERCISES: list[dict[str, str]] = [
+        # --- Chest (Push) ---
+        {"name": "Barbell Bench Press", "muscle_group": "chest", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Incline Dumbbell Press", "muscle_group": "chest", "equipment": "dumbbell", "exercise_type": "compound"},
+        {"name": "Decline Bench Press", "muscle_group": "chest", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Dumbbell Fly", "muscle_group": "chest", "equipment": "dumbbell", "exercise_type": "isolation"},
+        {"name": "Cable Crossover", "muscle_group": "chest", "equipment": "cable", "exercise_type": "isolation"},
+        {"name": "Push-Up", "muscle_group": "chest", "equipment": "bodyweight", "exercise_type": "compound"},
+        {"name": "Dips", "muscle_group": "chest", "equipment": "bodyweight", "exercise_type": "compound"},
+        # --- Shoulders (Push) ---
+        {"name": "Overhead Press", "muscle_group": "shoulders", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Dumbbell Shoulder Press", "muscle_group": "shoulders", "equipment": "dumbbell", "exercise_type": "compound"},
+        {"name": "Lateral Raise", "muscle_group": "shoulders", "equipment": "dumbbell", "exercise_type": "isolation"},
+        {"name": "Front Raise", "muscle_group": "shoulders", "equipment": "dumbbell", "exercise_type": "isolation"},
+        {"name": "Face Pull", "muscle_group": "shoulders", "equipment": "cable", "exercise_type": "isolation"},
+        # --- Triceps (Push) ---
+        {"name": "Triceps Pushdown", "muscle_group": "triceps", "equipment": "cable", "exercise_type": "isolation"},
+        {"name": "Skull Crusher", "muscle_group": "triceps", "equipment": "barbell", "exercise_type": "isolation"},
+        {"name": "Overhead Triceps Extension", "muscle_group": "triceps", "equipment": "dumbbell", "exercise_type": "isolation"},
+        # --- Back (Pull) ---
+        {"name": "Deadlift", "muscle_group": "back", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Pull-Up", "muscle_group": "back", "equipment": "bodyweight", "exercise_type": "compound"},
+        {"name": "Chin-Up", "muscle_group": "back", "equipment": "bodyweight", "exercise_type": "compound"},
+        {"name": "Lat Pulldown", "muscle_group": "back", "equipment": "cable", "exercise_type": "compound"},
+        {"name": "Barbell Row", "muscle_group": "back", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Seated Cable Row", "muscle_group": "back", "equipment": "cable", "exercise_type": "compound"},
+        {"name": "T-Bar Row", "muscle_group": "back", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "One-Arm Dumbbell Row", "muscle_group": "back", "equipment": "dumbbell", "exercise_type": "compound"},
+        # --- Biceps (Pull) ---
+        {"name": "Barbell Curl", "muscle_group": "biceps", "equipment": "barbell", "exercise_type": "isolation"},
+        {"name": "Dumbbell Curl", "muscle_group": "biceps", "equipment": "dumbbell", "exercise_type": "isolation"},
+        {"name": "Hammer Curl", "muscle_group": "biceps", "equipment": "dumbbell", "exercise_type": "isolation"},
+        {"name": "Preacher Curl", "muscle_group": "biceps", "equipment": "machine", "exercise_type": "isolation"},
+        # --- Legs ---
+        {"name": "Back Squat", "muscle_group": "quadriceps", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Front Squat", "muscle_group": "quadriceps", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Romanian Deadlift", "muscle_group": "hamstrings", "equipment": "barbell", "exercise_type": "compound"},
+        {"name": "Bulgarian Split Squat", "muscle_group": "quadriceps", "equipment": "dumbbell", "exercise_type": "compound"},
+        {"name": "Leg Press", "muscle_group": "quadriceps", "equipment": "machine", "exercise_type": "compound"},
+        {"name": "Leg Extension", "muscle_group": "quadriceps", "equipment": "machine", "exercise_type": "isolation"},
+        {"name": "Leg Curl", "muscle_group": "hamstrings", "equipment": "machine", "exercise_type": "isolation"},
+        {"name": "Walking Lunge", "muscle_group": "quadriceps", "equipment": "dumbbell", "exercise_type": "compound"},
+        {"name": "Standing Calf Raise", "muscle_group": "calves", "equipment": "machine", "exercise_type": "isolation"},
+        {"name": "Hip Thrust", "muscle_group": "glutes", "equipment": "barbell", "exercise_type": "compound"},
+        # --- Core ---
+        {"name": "Plank", "muscle_group": "core", "equipment": "bodyweight", "exercise_type": "isolation"},
+        {"name": "Hanging Leg Raise", "muscle_group": "core", "equipment": "bodyweight", "exercise_type": "isolation"},
+        {"name": "Cable Crunch", "muscle_group": "core", "equipment": "cable", "exercise_type": "isolation"},
+        {"name": "Russian Twist", "muscle_group": "core", "equipment": "bodyweight", "exercise_type": "isolation"},
+        # --- Cardio ---
+        {"name": "Running", "muscle_group": "cardio", "equipment": "bodyweight", "exercise_type": "cardio"},
+        {"name": "Cycling", "muscle_group": "cardio", "equipment": "machine", "exercise_type": "cardio"},
+        {"name": "Rowing", "muscle_group": "cardio", "equipment": "machine", "exercise_type": "cardio"},
+        {"name": "Jump Rope", "muscle_group": "cardio", "equipment": "bodyweight", "exercise_type": "cardio"},
+        {"name": "Stair Climber", "muscle_group": "cardio", "equipment": "machine", "exercise_type": "cardio"},
+    ]
+
+    async with async_session_maker() as db:
+        # Check how many exercises exist already
+        count_result = await db.execute(select(func.count(Exercise.id)))
+        existing_count = count_result.scalar() or 0
+
+        if existing_count >= len(EXERCISES):
+            print(f"Exercise library already populated ({existing_count} exercises). Skipping seed.")
+            return
+
+        # Get existing names so we can skip duplicates
+        existing_result = await db.execute(select(Exercise.name))
+        existing_names = {row[0] for row in existing_result}
+
+        inserted = 0
+        for ex in EXERCISES:
+            if ex["name"] in existing_names:
+                continue
+            db.add(Exercise(
+                name=ex["name"],
+                muscle_group=ex["muscle_group"],
+                equipment=ex["equipment"],
+                exercise_type=ex["exercise_type"],
+            ))
+            inserted += 1
+
+        if inserted:
+            await db.commit()
+            print(f"Seeded {inserted} exercises ({len(existing_names)} already existed).")
+        else:
+            print("All seed exercises already present. Nothing to insert.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
     print("LifeOS AI Backend starting up...")
-    
+
     # Create tables (for development - in production use migrations)
     if os.getenv("CREATE_TABLES", "false").lower() == "true":
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    
+
+    # Seed the exercise library so the workout generator always has data
+    try:
+        await seed_exercises()
+    except Exception as exc:
+        print(f"Warning: exercise seed failed ({exc}). Workout generator may lack exercises.")
+
     yield
-    
+
     # Shutdown
     print("LifeOS AI Backend shutting down...")
     await async_engine.dispose()
@@ -592,35 +701,27 @@ async def get_workout(
 # AI Workout Generator
 # =============================================================================
 
-@app.post("/api/v1/workouts/ai-generate", response_model=AiWorkoutResponse)
-async def ai_generate_workout(
+async def _generate_workout_internal(
     request: AiWorkoutRequest,
-    db: AsyncSession = Depends(get_async_db),
-    user: User = Depends(get_current_user),
-):
+    db: AsyncSession,
+    user: User,
+) -> Optional[AiWorkoutResponse]:
     """
-    Generate a personalized workout plan via Claude (OpenRouter).
+    Internal: generate a personalized workout plan via Claude (OpenRouter).
 
     The model receives the user's exercise library (so it only picks names
     that exist) plus goal/level/equipment/duration and returns a structured
     JSON plan. We then match names back to library IDs before responding.
-    """
-    if not OPENROUTER_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="AI service not configured",
-        )
 
+    Reusable by both the direct endpoint and the chat-to-workout flow.
+    """
     from sqlalchemy import select
 
     # Load library scoped to the user's equipment selection
     library_result = await db.execute(select(Exercise))
     library = library_result.scalars().all()
     if not library:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Exercise library is empty. Seed exercises first.",
-        )
+        return None
 
     equipment_set = {e.lower() for e in request.equipment}
     available = [
@@ -715,7 +816,6 @@ Rules:
     # Strip ``` fences if Claude ignored instructions
     if raw_content.startswith("```"):
         lines = raw_content.splitlines()
-        # Drop the first fence line and any language tag, and the closing fence
         raw_content = "\n".join(
             ln for ln in lines[1:] if not ln.strip().startswith("```")
         )
@@ -728,11 +828,8 @@ Rules:
     import json as _json
     try:
         parsed = _json.loads(raw_content)
-    except _json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI returned invalid JSON: {e}",
-        )
+    except _json.JSONDecodeError:
+        return None
 
     # Build name → id map for library lookup (case insensitive)
     name_to_id = {ex.name.lower(): (str(ex.id), ex.muscle_group) for ex in library}
@@ -774,10 +871,7 @@ Rules:
         )
 
     if not exercises:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI response had no usable exercises",
-        )
+        return None
 
     return AiWorkoutResponse(
         name=str(parsed.get("name", f"{request.workout_type.title()} Session")),
@@ -787,6 +881,28 @@ Rules:
         exercises=exercises,
         model=ai_response.model,
     )
+
+
+@app.post("/api/v1/workouts/ai-generate", response_model=AiWorkoutResponse)
+async def ai_generate_workout(
+    request: AiWorkoutRequest,
+    db: AsyncSession = Depends(get_async_db),
+    user: User = Depends(get_current_user),
+):
+    """Generate a personalized workout plan via Claude (OpenRouter)."""
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AI service not configured",
+        )
+
+    result = await _generate_workout_internal(request, db, user)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not generate workout. Check exercise library.",
+        )
+    return result
 
 
 # =============================================================================
@@ -1241,30 +1357,26 @@ async def chat(
         "today_tasks": today_tasks,
         "recent_workout": recent_workout_dict
     }
-    
-    # Chat
-    client = OpenRouterClient(api_key=OPENROUTER_API_KEY)
-    agent = ChatAgent(client)
-    
-    response = await agent.chat(
-        user_message=request.message,
-        context=context,
-        conversation_history=request.conversation_history
-    )
-    
-    # Check if mood detection is triggered
+
+    # ------------------------------------------------------------------
+    # Pre-chat detection: mood & workout intent
+    # We run these BEFORE the ChatAgent call so the AI response can
+    # naturally reference the detected mood or generated workout.
+    # ------------------------------------------------------------------
     mood_detected = None
     suggested_action = None
-    
+    workout_generated = None
+
+    # --- Mood detection (before chat) ---
     lower_msg = request.message.lower()
-    mood_keywords = ["feeling", "mood", "stressed", "tired", "happy", "sad", 
+    mood_keywords = ["feeling", "mood", "stressed", "tired", "happy", "sad",
                      "anxious", "excited", "energy", "sleep", "worried"]
-    
+
     if any(kw in lower_msg for kw in mood_keywords):
         # Detect mood from the message
         detector = MoodDetector(api_key=OPENROUTER_API_KEY)
         metrics = await detector.detect(request.message)
-        
+
         # Save mood entry
         mood_entry = MoodEntry(
             user_id=user.id,
@@ -1279,7 +1391,7 @@ async def chat(
         )
         db.add(mood_entry)
         await db.commit()
-        
+
         mood_detected = {
             "anxiety": metrics.anxiety,
             "happiness": metrics.happiness,
@@ -1289,11 +1401,123 @@ async def chat(
             "energy": metrics.energy
         }
         suggested_action = "mood_logged"
-    
+
+        # Inject detected mood into context so the AI can acknowledge it
+        context["detected_mood"] = mood_detected
+
+    # --- Workout generation (before chat) ---
+    if WorkoutIntentExtractor.has_workout_intent(request.message):
+        try:
+            intent_client = OpenRouterClient(api_key=OPENROUTER_API_KEY)
+            extractor = WorkoutIntentExtractor(intent_client)
+            params = await extractor.extract_params(request.message)
+
+            if params:
+                workout_request = AiWorkoutRequest(
+                    goal=params.get("goal", "hypertrophy"),
+                    level=params.get("level", "intermediate"),
+                    duration_minutes=params.get("duration_minutes", 60),
+                    workout_type=params.get("workout_type", "push"),
+                    equipment=params.get("equipment", ["barbell", "dumbbell", "machine", "bodyweight", "cable"]),
+                    notes=params.get("notes"),
+                )
+
+                ai_workout = await _generate_workout_internal(workout_request, db, user)
+
+                if ai_workout:
+                    # Auto-save as a WorkoutSession
+                    session = WorkoutSession(
+                        user_id=user.id,
+                        workout_type=ai_workout.workout_type,
+                        name=ai_workout.name,
+                        notes=ai_workout.notes,
+                        duration_minutes=ai_workout.duration_minutes,
+                        started_at=datetime.utcnow(),
+                    )
+                    db.add(session)
+                    await db.flush()  # get session.id
+
+                    total_vol = 0
+                    saved_exercises = []
+                    for ai_ex in ai_workout.exercises:
+                        # exercise_id already resolved by _generate_workout_internal
+                        exercise_id = ai_ex.exercise_id
+                        sets_json = [
+                            {"reps": s.reps, "weight": s.weight, "rpe": s.rpe}
+                            for s in ai_ex.sets
+                        ]
+
+                        # Only persist to DB if exercise was matched in the library
+                        if exercise_id:
+                            ex_volume = sum(s.reps * s.weight for s in ai_ex.sets)
+                            total_vol += ex_volume
+
+                            we = WorkoutExercise(
+                                session_id=session.id,
+                                exercise_id=exercise_id,
+                                sets=sets_json,
+                                total_volume=ex_volume,
+                                total_reps=sum(s.reps for s in ai_ex.sets),
+                                max_weight=max((s.weight for s in ai_ex.sets), default=0),
+                                notes=ai_ex.notes,
+                            )
+                            db.add(we)
+
+                        # Always include in chat response for display
+                        saved_exercises.append({
+                            "name": ai_ex.name,
+                            "muscle_group": ai_ex.muscle_group,
+                            "sets": sets_json,
+                            "notes": ai_ex.notes,
+                        })
+
+                    session.total_volume = total_vol
+                    await db.commit()
+                    await db.refresh(session)
+
+                    workout_generated = {
+                        "id": str(session.id),
+                        "name": ai_workout.name,
+                        "workout_type": ai_workout.workout_type,
+                        "duration_minutes": ai_workout.duration_minutes,
+                        "notes": ai_workout.notes,
+                        "exercises": saved_exercises,
+                    }
+                    suggested_action = "workout_created"
+
+                    # Inject generated workout into context so the AI can describe it
+                    context["just_generated_workout"] = {
+                        "name": ai_workout.name,
+                        "workout_type": ai_workout.workout_type,
+                        "duration_minutes": ai_workout.duration_minutes,
+                        "num_exercises": len(saved_exercises),
+                        "exercises": [
+                            {"name": e["name"], "muscle_group": e["muscle_group"]}
+                            for e in saved_exercises
+                        ],
+                    }
+        except Exception as exc:
+            logger.exception("Workout generation from chat failed: %s", exc)
+            await db.rollback()
+            workout_generated = None
+
+    # ------------------------------------------------------------------
+    # Chat: now the AI has full context (mood + workout if applicable)
+    # ------------------------------------------------------------------
+    client = OpenRouterClient(api_key=OPENROUTER_API_KEY)
+    agent = ChatAgent(client)
+
+    response = await agent.chat(
+        user_message=request.message,
+        context=context,
+        conversation_history=request.conversation_history
+    )
+
     return ChatResponse(
         response=response.content,
         mood_detected=mood_detected,
-        suggested_action=suggested_action
+        suggested_action=suggested_action,
+        workout_generated=workout_generated,
     )
 
 

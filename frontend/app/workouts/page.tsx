@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Dumbbell,
   Plus,
@@ -132,6 +133,9 @@ export default function WorkoutsPage() {
     }
   }, []);
 
+  const searchParams = useSearchParams();
+  const expandFromChat = searchParams.get("expand");
+
   useEffect(() => {
     const cancelledRef = { current: false };
     setLoading(true);
@@ -142,6 +146,20 @@ export default function WorkoutsPage() {
       cancelledRef.current = true;
     };
   }, [loadWorkouts, loadLibrary]);
+
+  // Auto-expand workout when navigating from chat with ?expand=id
+  useEffect(() => {
+    if (expandFromChat && !loading && workouts.length > 0) {
+      setExpandedId(expandFromChat);
+      // Scroll the expanded card into view after DOM update
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`workout-card-${expandFromChat}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
+    }
+  }, [expandFromChat, loading, workouts]);
 
   const [detailsCache, setDetailsCache] = useState<Record<string, Workout>>({});
   const handleExpand = async (id: string) => {
@@ -777,10 +795,11 @@ export default function WorkoutsPage() {
           <div className="space-y-3">
             {workouts.map((w) => {
               const isExpanded = expandedId === w.id;
+              const isFromChat = expandFromChat === w.id;
               const detail = detailsCache[w.id];
               const displayType = w.workout_type || "Workout";
               return (
-                <div key={w.id} className="glass-card p-5 rounded-2xl border border-white/5">
+                <div key={w.id} id={`workout-card-${w.id}`} className={`glass-card p-5 rounded-2xl border ${isFromChat ? "border-indigo-500/50 ring-1 ring-indigo-500/30 animate-pulse-once" : "border-white/5"}`}>
                   <button
                     onClick={() => handleExpand(w.id)}
                     className="w-full flex items-center justify-between text-left"

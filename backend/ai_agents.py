@@ -462,6 +462,103 @@ Generate insights now."""
         }
 
 
+class WorkoutIntentExtractor:
+    """
+    Extracts structured workout parameters from natural language chat messages.
+    Uses a fast model to convert "monta um treino de peito, 45 min" into
+    structured AiWorkoutRequest-compatible params.
+    """
+
+    # Multi-word phrases that are unambiguous workout creation intent
+    EXPLICIT_PHRASES = [
+        "montar treino", "monta um treino", "monte um treino",
+        "cria um treino", "crie um treino",
+        "gera um treino", "gere um treino",
+        "prepara um treino", "faz um treino",
+        "create a workout", "generate a workout", "build a workout",
+        "make me a workout", "plan a workout",
+        "quero treinar", "preciso de um treino",
+        "bora treinar", "vamos treinar",
+    ]
+
+    # Nouns that indicate workout context
+    WORKOUT_NOUNS = [
+        "treino", "workout", "exercicio", "academia",
+        "training session", "gym session",
+    ]
+
+    # Verbs that indicate creation intent (only matched WITH a workout noun)
+    CREATION_VERBS = [
+        "monta", "monte", "cria", "crie", "gera", "gere", "prepara",
+        "prepare", "faz", "faca", "create", "generate", "build", "make",
+        "plan", "design", "quero", "preciso", "need", "want",
+    ]
+
+    def __init__(self, client: OpenRouterClient):
+        self.client = client
+
+    @staticmethod
+    def has_workout_intent(message: str) -> bool:
+        """Check if the message expresses explicit intent to create a workout.
+        Requires either an explicit multi-word phrase OR a creation verb + workout noun."""
+        lower = message.lower()
+
+        # Check explicit multi-word phrases first (high confidence)
+        for phrase in WorkoutIntentExtractor.EXPLICIT_PHRASES:
+            if phrase in lower:
+                return True
+
+        # Require BOTH a workout noun AND a creation verb (prevents false positives)
+        has_noun = any(n in lower for n in WorkoutIntentExtractor.WORKOUT_NOUNS)
+        has_verb = any(v in lower for v in WorkoutIntentExtractor.CREATION_VERBS)
+        return has_noun and has_verb
+
+    async def extract_params(self, message: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract workout parameters from a natural language message.
+        Returns a dict compatible with AiWorkoutRequest fields, or None on failure.
+        """
+        system_prompt = """You extract workout parameters from natural language messages.
+Return ONLY valid JSON with these fields (use defaults when not specified):
+{
+  "goal": "hypertrophy",        // strength | hypertrophy | fat_loss | endurance
+  "level": "intermediate",      // beginner | intermediate | advanced
+  "duration_minutes": 60,       // 10-180
+  "workout_type": "push",       // push | pull | legs | full_body | cardio | upper | lower
+  "equipment": ["barbell", "dumbbell", "machine", "bodyweight", "cable"],
+  "notes": null                 // any extra context from the user
+}
+
+Mapping hints for workout_type:
+- peito/chest/ombro/shoulder/triceps → "push"
+- costas/back/biceps → "pull"
+- perna/legs/gluteo/quadriceps → "legs"
+- corpo inteiro/full body → "full_body"
+- cardio/corrida/running/hiit → "cardio"
+- superior/upper → "upper"
+- inferior/lower → "lower"
+
+Return ONLY the JSON object. No explanation."""
+
+        response = await self.client.chat(
+            messages=[{"role": "user", "content": message}],
+            system=system_prompt,
+            temperature=0.1,
+            max_tokens=300,
+        )
+
+        raw = response.content.strip()
+        first_brace = raw.find("{")
+        last_brace = raw.rfind("}")
+        if first_brace >= 0 and last_brace > first_brace:
+            raw = raw[first_brace : last_brace + 1]
+
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, Exception):
+            return None
+
+
 class ChatAgent:
     """
     General conversational AI agent for the chat interface.
@@ -475,11 +572,18 @@ productivity, and personal growth. You have access to their mood data, workouts,
 
 You can:
 - Check in on their mood and log mood entries
+- Generate personalized workout plans when asked (the system will automatically create and save the workout)
 - Provide workout motivation and track progress
 - Help manage tasks and priorities
 - Generate daily briefings and weekly insights
 - Have genuine, supportive conversations
 
+When a user asks you to create/build/generate a workout, respond enthusiastically and mention
+that the workout has been created and saved. Describe the workout briefly in your response.
+The system handles the actual generation — just acknowledge it naturally.
+
+Always reply in the same language the user writes in (e.g., Portuguese if they write in Portuguese).
+When describing a generated workout, briefly mention the key exercises and encourage the user.
 Be conversational, not clinical. Show genuine interest. Keep responses concise.
 When appropriate, suggest actions they might want to take (logging mood, checking brief, etc.)"""
     
@@ -523,7 +627,7 @@ When appropriate, suggest actions they might want to take (logging mood, checkin
     def _format_context(self, context: Dict[str, Any]) -> str:
         """Format context data into a readable string."""
         parts = []
-        
+
         m = context.get("recent_mood") or {}
         if m:
             parts.append(f"Recent mood: anxiety={m.get('anxiety', '?')}, happiness={m.get('happiness', '?')}")
@@ -536,7 +640,29 @@ When appropriate, suggest actions they might want to take (logging mood, checkin
         w = context.get("recent_workout") or {}
         if w:
             parts.append(f"Last workout: {w.get('name', 'Session')} - {w.get('duration', '?')} min")
-        
+
+        # Detected mood from the current message (pre-chat)
+        dm = context.get("detected_mood") or {}
+        if dm:
+            parts.append(
+                f"[MOOD JUST DETECTED from this message] "
+                f"anxiety={dm.get('anxiety', '?')}, happiness={dm.get('happiness', '?')}, "
+                f"wellness={dm.get('wellness', '?')}, energy={dm.get('energy', '?')} "
+                f"— Acknowledge the user's emotional state naturally."
+            )
+
+        # Workout just generated from the current message (pre-chat)
+        gw = context.get("just_generated_workout") or {}
+        if gw:
+            ex_names = ", ".join(e.get("name", "") for e in (gw.get("exercises") or []))
+            parts.append(
+                f"[WORKOUT JUST GENERATED and saved] "
+                f"name=\"{gw.get('name', '?')}\", type={gw.get('workout_type', '?')}, "
+                f"duration={gw.get('duration_minutes', '?')} min, "
+                f"{gw.get('num_exercises', '?')} exercises: {ex_names}. "
+                f"Describe this workout to the user enthusiastically."
+            )
+
         return "\n".join(parts)
 
 

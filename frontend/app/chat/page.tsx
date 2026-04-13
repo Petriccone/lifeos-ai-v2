@@ -11,27 +11,47 @@ import {
   X,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import type { WorkoutGeneratedFromChat } from "@/lib/types";
+import WorkoutChatCard from "@/components/WorkoutChatCard";
+import { useAuth } from "@/lib/AuthContext";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   moodDetected?: string | null;
+  workoutGenerated?: WorkoutGeneratedFromChat | null;
+}
+
+function buildGreeting(name?: string | null): string {
+  const greeting = name ? `Hey, ${name}!` : "Hey!";
+  return `${greeting} I'm LifeOS AI.\nTell me how you're feeling right now or ask me to analyze your weekly metrics. I'm here to support your goals.`;
 }
 
 export default function ChatPage() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "0",
       role: "assistant",
-      content:
-        "Hey, Rafael! I'm LifeOS AI.\nTell me how you're feeling right now or ask me to analyze your weekly metrics. I'm here to support your goals.",
+      content: buildGreeting(),
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Update the initial greeting once the user loads
+  useEffect(() => {
+    if (user) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === "0" ? { ...m, content: buildGreeting(user.name) } : m
+        )
+      );
+    }
+  }, [user]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -68,6 +88,7 @@ export default function ChatPage() {
         role: "assistant",
         content: res.response,
         moodDetected: res.mood_detected,
+        workoutGenerated: res.workout_generated || null,
       };
       setMessages((prev) => [...prev, aiMessage]);
     } catch (err) {
@@ -85,8 +106,8 @@ export default function ChatPage() {
 
   const quickActions = [
     "I'm feeling stressed",
-    "Had a great workout!",
-    "Log a sleep of 8 hours",
+    "Monta um treino de peito",
+    "Monta um treino de perna",
     "Give me daily insights",
   ];
 
@@ -180,6 +201,10 @@ export default function ChatPage() {
                   <div className="mt-1 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] text-indigo-300 uppercase tracking-widest">
                     Mood: {message.moodDetected}
                   </div>
+                )}
+
+                {message.workoutGenerated && (
+                  <WorkoutChatCard workout={message.workoutGenerated} />
                 )}
 
                 <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-1">

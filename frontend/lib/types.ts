@@ -149,10 +149,25 @@ export interface ChatRequest {
   conversation_history?: ChatMessage[];
 }
 
+export interface WorkoutGeneratedFromChat {
+  id: string;
+  name: string;
+  workout_type: string;
+  duration_minutes: number;
+  notes?: string | null;
+  exercises: Array<{
+    name: string;
+    muscle_group?: string | null;
+    sets: Array<{ reps: number; weight: number; rpe?: number | null }>;
+    notes?: string | null;
+  }>;
+}
+
 export interface ChatResponse {
   response: string;
   mood_detected?: string | null;
   suggested_action?: string | null;
+  workout_generated?: WorkoutGeneratedFromChat | null;
 }
 
 export interface DailyBrief {
